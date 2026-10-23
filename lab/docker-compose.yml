@@ -6,6 +6,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: regex2shell-vuln
+    environment:
+      # fixed mmap threshold: disables glibc's dynamic adjustment so the
+      # engine's big match buffer always goes to the mmap zone (adjacent to
+      # ruby heap pages) instead of the brk heap
+      MALLOC_MMAP_THRESHOLD_: "131072"
     ports:
       - "29565:8080"
 
@@ -14,5 +19,7 @@ services:
       context: .
       dockerfile: Dockerfile.fixed
     container_name: regex2shell-fixed
+    environment:
+      MALLOC_MMAP_THRESHOLD_: "131072"
     ports:
       - "29566:8080"

