@@ -1,0 +1,28 @@
+# Fixed side of the regex2shell differential pair.
+#
+# ruby:3.4.12 was released 2026-10-23 but the official docker library tag was
+# not published yet at build time, so the fixed interpreter is compiled from
+# the official release tarball (cache.ruby-lang.org) inside Docker. The
+# ruby:3.4.11 base provides the build toolchain; the compiled /usr/local
+# (3.4.12, including the Onigmo fixes) overwrites the base install.
+FROM ruby:3.4.11 AS builder
+ARG RUBY_TARBALL=https://cache.ruby-lang.org/pub/ruby/3.4/ruby-3.4.12.tar.gz
+WORKDIR /tmp/ruby
+RUN curl -fsSL "$RUBY_TARBALL" -o ruby.tar.gz \
+ && echo "$RUBY_TARBALL" \
+ && tar xzf ruby.tar.gz --strip-components=1 \
+ && ./configure --prefix=/usr/local --disable-install-doc \
+ && make -j"$(nproc)" \
+ && make install \
+ && /usr/local/bin/ruby -v
+
+FROM ruby:3.4.11
+COPY --from=builder /usr/local /usr/local
+RUN ruby -v | grep -F 'ruby 3.4.12' \
+ && gem install org-ruby -v 0.9.12 --no-document
+
+WORKDIR /app
+COPY server.rb render.rb /app/
+ENV REQUEST_TIMEOUT=15
+EXPOSE 8080
+CMD ["ruby", "/app/server.rb"]
