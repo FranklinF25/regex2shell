@@ -62,12 +62,18 @@ Everything Ruby-side runs inside Docker; the host only needs Python 3
 ## What is original here vs prior work
 
 The vulnerabilities, their discovery and the exploitation designs are
-**prior work by joaxcar** (Johan Carlsson, via GitLab's HackerOne program),
+**prior work by joaxcar** (Johan Carlsson, via GitLab's HackerOne program;
+the full report remains restricted — public at 90 days post-patch),
 GitLab (disclosure, patch, TLDR detections) and the Ruby core team (upstream
 fixes). yaamlabs published the mechanics outline (16-bit wrap, `#+TODO:`
 interpolation, request-body grooming → `system()`); public PoC repos
 (TahuCryptsi et al.) are crash/detector scripts — equivalent to this repo's
-`poc/` layer.
+`poc/` layer; the deepest public artifact, the lesterlam reproduction lab,
+compiles the engine standalone and demonstrates a blind-read oracle at the
+same primitive characterized below — but explicitly excludes weaponized RCE
+(verified 2026-10-23: no public technique exists to port). GitLab itself
+calls the real attack "a grind": noisy, most attempts failing — consistent
+with the heap-layout dependence measured in this repo's lab.
 
 Original work in this repo: the **fix-commit-anchored family datasheet**
 (ruby/ruby PR diffs), the **dockerized Ruby+org-ruby differential pair**

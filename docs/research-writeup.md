@@ -85,10 +85,16 @@ kill (both directions), the #19020 compile-hang arm, the pure write
 primitive with controlled value/offset, the brk-heap echo, and the
 placement model above.
 
-Public art as of 2026-10-23: crash/detector PoCs (equivalent to this
-repo's `poc/` layer) and mechanics outlines — **no public exploit chain**.
-The reporter's full technique (heap grooming via request body to
-`system()`) is private (HackerOne). Porting it php2shell-style is therefore
+Public art as of 2026-10-23 (re-checked same day): crash/detector PoCs
+(equivalent to this repo's `poc/` layer), mechanics outlines, and the
+lesterlam standalone reproduction lab — which adds a **blind-read oracle**
+(the `repeat_range[mem].lower == 0` branch leaks foreign heap bytes as
+match-vs-no-match) at the same primitive this repo characterizes, but
+explicitly excludes weaponized RCE. **No public exploit chain exists**;
+GitLab's own write-up calls the real attack "a grind" with most attempts
+failing — matching the heap-layout dependence measured here. The
+reporter's full technique (heap grooming via request body to `system()`)
+remains private (HackerOne report restricted; 90-day disclosure). Porting it php2shell-style is therefore
 impossible today; the open work is deterministic adjacency of the 260 KiB
 buffer to a controlled victim (exact-fit 268 KiB anchor as the last
 allocation; or identifying the 192 KiB region 36 KiB below the buffer — if
