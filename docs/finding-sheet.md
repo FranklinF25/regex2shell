@@ -127,6 +127,15 @@ CI route of the family (CVE-2026-97229): unauthenticated `/ci/lint`
 * **Re-patch trap**: 19.2.8 / 19.3.5 / 19.4.2 (2026-10-12, fixed
   CVE-2026-97229) are one patch **below** the 110264 fixes (19.2.9 /
   19.3.6 / 19.4.3) → instances patched on 10-12 remain vulnerable.
+* **Ruby-side traps**: 3.2 and earlier get **no fix** (3.2 EOL 2026-04-01,
+  3.2.11 was final — move to 3.4/4.0); 4.0.8 (same week) fixed the
+  size-overflow pair but **not** 110264 — 4.0 users must install 4.0.9.
+* **CVE-scanner gap**: GitLab's CVE records name only GitLab as the affected
+  product, so scanners matching CVE records against installed Ruby versions
+  have nothing to match — inventory via `ruby -v` or this repo's detector.
+* **Embedded Ruby**: GitLab Omnibus ships its own interpreter — check
+  `/opt/gitlab/embedded/bin/ruby -v`; patching the distro Ruby does nothing
+  for GitLab, and GitLab's patch does nothing for other Ruby apps.
 * Reach beyond GitLab: any app that compiles attacker-controlled regexp
   source (`Regexp.new`, `Regexp.union`, `Regexp.compile`, `/#{input}/`
   interpolation). `Regexp.timeout` does **not** protect; pattern-length
@@ -147,4 +156,5 @@ mirroring Puma worker respawn). Details + probe tables: `lab/README.md`.
 - github.com/ruby/ruby/pull/16801 · /pull/19020 · /pull/13332 (fix diffs)
 - gitlab.com/gitlab-security-oss/tldr — onigmo_native_worker_crash.md · org_mode_render_error_burst.md
 - yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler (3rd-party mechanics: 16-bit ID, `#+TODO:` interpolation, `system()` as `git`)
+- thehackernews.com/2026/10/ruby-fixes-three-regex-engine-bugs.html (Ruby-side remediation facts: 3.2 EOL no-fix, 4.0.8 partial-fix trap, CVE-scanner gap, embedded-Ruby check)
 - GHSA-83vq-rvff-66gw (GitLab advisory record)
