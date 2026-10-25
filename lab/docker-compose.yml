@@ -7,10 +7,13 @@ services:
       dockerfile: Dockerfile
     container_name: regex2shell-vuln
     environment:
-      # fixed mmap threshold: disables glibc's dynamic adjustment so the
-      # engine's big match buffer always goes to the mmap zone (adjacent to
-      # ruby heap pages) instead of the brk heap
-      MALLOC_MMAP_THRESHOLD_: "131072"
+      # fixed mmap threshold high enough that every actor of the stage-3
+      # construction (marker band, exact-fit anchor, engine arrays) lives in
+      # the brk arena where the band-below-anchor geometry is built
+      MALLOC_MMAP_THRESHOLD_: "4194304"
+      # the band construction + the pathological (timeout-rescued) match need
+      # more wall time than the default 15s
+      REQUEST_TIMEOUT: "60"
     ports:
       - "29565:8080"
 
@@ -20,6 +23,7 @@ services:
       dockerfile: Dockerfile.fixed
     container_name: regex2shell-fixed
     environment:
-      MALLOC_MMAP_THRESHOLD_: "131072"
+      MALLOC_MMAP_THRESHOLD_: "4194304"
+      REQUEST_TIMEOUT: "60"
     ports:
       - "29566:8080"

