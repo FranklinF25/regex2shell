@@ -13,7 +13,7 @@ Blog/3rd-party claims used only where marked and re-verified in the lab.
 | Component | Onigmo (Ruby's built-in regex engine), bundled inside GitLab |
 | Trigger | Compiling+matching a specially crafted regexp from user input |
 | GitLab sink | Org-mode renderer: `.org` file → org-ruby 0.9.12 → `Regexp.new` with interpolated `#+TODO:` keyword |
-| Auth | None — anonymous visitor viewing a public project's `.org` file (2nd route: blob editor preview, authenticated) [yaamlabs, unverified] |
+| Auth | None — anonymous visitor viewing a public project's `.org` file. 2nd route: the editor preview picks its renderer from `file_path` (even while editing `.md`), authenticated [yaamlabs; corroborated lilting.ch] |
 | Affected | **Every GitLab CE/EE since 7.0 (2014)** |
 | Fixed (GitLab) | 19.5.1, 19.4.3, 19.3.6 + backports 19.2.9, 19.1.9, 19.0.10, 18.11.13 (2026-10-21) |
 | Fixed (Ruby) | 4.0.9 / 3.4.12 / 3.3.13 (2026-10-23) |
@@ -29,15 +29,17 @@ fixes related to GitLab's CVEs"). C files live upstream in ruby/Onigmo.
 |---|---|---|---|---|---|---|---|
 | CVE-2026-89078 | 9.9 / authed | 19.4.1 | Double free when parsing fails after an alternation | ruby/ruby#13332 (regparse.c: free node once via temp pointer) | 4.0.0 | **3.4.12** | 3.3.13 |
 | CVE-2026-93577 | 9.9 / authed | 19.4.1 | Integer overflow in the **size of a compiled pattern** | ruby/ruby#19020 commits `c2a3805` + `b3095b7` (regcomp.c) | 4.0.8 | **3.4.12** | 3.3.13 |
-| CVE-2026-97229 | 10.0 / unauth (CI lint path) | 19.4.2 (2026-10-12) | same size-overflow bug, CI/CD `regexp_matcher.rb` path | same as 93577 | 4.0.8 | **3.4.12** | 3.3.13 |
+| CVE-2026-97229 | 10.0 / unauth (CI lint path) | 19.4.2 (2026-10-12) | same size-overflow bug, CI/CD `regexp_matcher.rb` path — TLDR frames it as a **bypass of the 93577 fix**; CI-path pair affected 19.2+ only | same as 93577 | 4.0.8 | **3.4.12** | 3.3.13 |
 | **CVE-2026-110264** | **10.0 / unauth** | **19.5.1** | **Overflow of internal repeat/null-check IDs in a pattern with many repeats** | **ruby/ruby#16801** commit `493d26dc` (regcomp.c, +20/−0) | 4.0.9 | **3.4.12** | 3.3.13 |
 
 All three fixes land together in Ruby 3.4.12 → the lab pair is
 `ruby:3.4.11` (vulnerable to all three) vs `ruby:3.4.12` (fixed).
 GitLab's own backports of the Ruby fixes are public as omnibus patches:
 `config/patches/ruby/regexp-repeat-id-overflow-{3.3,3.4,4.0}.patch`
-(omnibus-gitlab commit `73cec6d8`) — a second primary diff source alongside
-the ruby/ruby PRs.
+(+92/+92/+90), applied via `config/software/ruby.rb` for bundled Ruby
+≥ 3.3 < 4.1 — omnibus-gitlab commits `73cec6d8` / `3eba02b9` (same change
+cherry-picked to two branches, Asherah Connor, 2026-10-14; both verified) —
+a second primary diff source alongside the ruby/ruby PRs.
 
 ## Primary bug mechanics (CVE-2026-110264 = PR #16801)
 
@@ -102,9 +104,10 @@ assert_raise(RegexpError) { Regexp.new(source) }
 ```
 .org file (public project, anonymous view)
   → Banzai/HTML pipeline → OtherMarkupFilter (Timeout-wrapped)
-  → org-ruby 0.9.12 headline.rb: first pattern escapes the #+TODO: keyword,
-    a second Regexp.new interpolates the raw keyword → attacker controls
-    regexp source                                [yaamlabs; verified in lab]
+  → org-ruby 0.9.12 headline.rb:99: first pattern escapes the #+TODO: keyword,
+    a second Regexp.new interpolates the raw keyword — verbatim
+    `@headline_text.sub!(Regexp.new("^#{@keyword}\s*"), "")` → attacker
+    controls regexp source                     [yaamlabs; verified in lab]
   → Onigmo compile (ID assignment) + match (OOB via wrapped ID)
   → heap grooming via request body → system() as the `git` user   [yaamlabs]
 ```
@@ -125,27 +128,48 @@ CI route of the family (CVE-2026-97229): unauthenticated `/ci/lint`
 * Response guidance: treat as attempted RCE; join by host+time; pull `.org`
   payloads and `#+TODO:` lines; hunt `/tmp` files owned by `git`, child
   processes, outbound conns; rotate `gitlab-secrets.json`/tokens on success.
+* Omnibus grep operationalization [lilting.ch]: `Timeout::Error` +
+  `"extra.class_name":"OtherMarkup"` + `.org` in `exceptions_json.log`;
+  `[BUG]` + org-ruby/Onigmo frames in `puma/puma_stderr.log`. Pivot fields:
+  `meta.client_id` (`ip/<IP>` when anonymous) and `meta.project`. CI-path
+  pipeline attempts crash a Sidekiq worker (`sidekiq/current`), not Puma.
+  Caveats: `puma_stderr.log` is often not SIEM-shipped by default, and a
+  **successful** attack may leave no log at all — absence never clears.
 
 ## Traps and reach
 
 * **Re-patch trap**: 19.2.8 / 19.3.5 / 19.4.2 (2026-10-12, fixed
   CVE-2026-97229) are one patch **below** the 110264 fixes (19.2.9 /
   19.3.6 / 19.4.3) → instances patched on 10-12 remain vulnerable.
+  No workaround exists — there is no setting that disables Org-mode
+  rendering alone [lilting.ch].
+* **No fixed release ≤ 18.10**: older instances must walk the upgrade path
+  (required stops 18.2/18.5/18.8/18.11/19.2/19.5 with background migrations
+  at each — GitLab's Upgrade Path tool); 19.4.3/19.3.6 include DB migrations,
+  so a single-node install is down during upgrade [lilting.ch].
+* **Backport-scope trap**: 19.2.9 and older backports carry **only**
+  CVE-2026-110264 — the other 11 fixes of the 19.5.1 release (incl. two
+  High: CVE-2026-15723 OmniAuth/LDAP account takeover 8.2, CVE-2026-112212
+  OAuth/OIDC cache poisoning 7.5) are not in them [lilting.ch].
 * **Ruby-side traps**: 3.2 and earlier get **no fix** (3.2 EOL 2026-04-01,
   3.2.11 was final — move to 3.4/4.0); 4.0.8 (same week) fixed the
   size-overflow pair but **not** 110264 — 4.0 users must install 4.0.9.
-  Tracker timeline (bugs.ruby-lang.org, via WebProNews 2026-10-23): the
-  #16801 fix sat on **master since April 2026** (first lands in Ruby 4.1);
+  Tracker timeline (bugs.ruby-lang.org, via WebProNews + lilting.ch): the
+  #16801 fix sat on **master since 2026-04-29** (first lands in Ruby 4.1);
   S. Kaag flagged 4.0.8 shipping without it, J. Boussier (byroot) backported
-  to 3.4/3.3 within hours. Master-only merges ahead of a backport release
-  leave maintenance branches silently exposed — same lesson as the GitLab
-  re-patch trap.
+  to 3.4/3.3 within hours. Same pattern for #13332: merged May 2025, shipped
+  in 4.0.0 (Dec 2025), never reached 3.4/3.3 until 3.4.12/3.3.13. Master-only
+  merges ahead of a backport release leave maintenance branches silently
+  exposed — same lesson as the GitLab re-patch trap.
 * **CVE-scanner gap**: GitLab's CVE records name only GitLab as the affected
   product, so scanners matching CVE records against installed Ruby versions
   have nothing to match — inventory via `ruby -v` or this repo's detector.
 * **Embedded Ruby**: GitLab Omnibus ships its own interpreter — check
   `/opt/gitlab/embedded/bin/ruby -v`; patching the distro Ruby does nothing
-  for GitLab, and GitLab's patch does nothing for other Ruby apps.
+  for GitLab, and GitLab's patch does nothing for other Ruby apps. Reverse
+  gap: a **source install** of GitLab runs on the system Ruby — upgrading
+  GitLab does not patch it; upgrade that Ruby to 4.0.9/3.4.12/3.3.13
+  (the release post ships no source-install instructions) [lilting.ch].
 * Reach beyond GitLab: any app that compiles attacker-controlled regexp
   source (`Regexp.new`, `Regexp.union`, `Regexp.compile`, `/#{input}/`
   interpolation). `Regexp.timeout` does **not** protect; pattern-length
@@ -159,6 +183,13 @@ Differential pair `ruby:3.4.11` vs `ruby:3.4.12`, org-ruby pinned 0.9.12,
 per-request-process render harness (a `[BUG]` kills one disposable worker,
 mirroring Puma worker respawn). Details + probe tables: `lab/README.md`.
 
+Independent corroboration [lilting.ch, WSL2 x86_64, miniruby, 2026-10-23]:
+3.4.11 + the #16801 repeat-ID pattern → `[BUG]` SIGSEGV **at match** (same
+arm as this repo's `crash.py`); 4.0.8 behaves fixed for the #19020 pair yet
+crashes on #16801; `|{1000000}` aborts 3.4.11 with glibc `double free
+detected` (#13332 live on the 3.4 series); the nested-repeat compile eats
+2.6 GB before the 30 s kill vs instant `RegexpError` on 3.4.12.
+
 ## References
 
 - ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/ (CVE↔bug↔fix table, credits)
@@ -169,4 +200,5 @@ mirroring Puma worker respawn). Details + probe tables: `lab/README.md`.
 - gitlab.com/gitlab-security-oss/tldr — onigmo_native_worker_crash.md · org_mode_render_error_burst.md
 - yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler (3rd-party mechanics: 16-bit ID, `#+TODO:` interpolation, `system()` as `git`)
 - thehackernews.com/2026/10/ruby-fixes-three-regex-engine-bugs.html (Ruby-side remediation facts: 3.2 EOL no-fix, 4.0.8 partial-fix trap, CVE-scanner gap, embedded-Ruby check)
+- lilting.ch/en/articles/gitlab-cve-2026-110264-org-mode-rce · lilting.ch/en/articles/ruby-regexp-onigmo-fixes-gitlab-cves (headline.rb:99, preview-route detail, upgrade-path/stop table, backport-scope trap, grep operationalization, independent WSL2 5-version matrix, omnibus patch sourcing)
 - GHSA-83vq-rvff-66gw (GitLab advisory record)

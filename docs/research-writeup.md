@@ -90,7 +90,10 @@ Public art as of 2026-10-24 (re-checked 2026-10-23 and 2026-10-24): crash/detect
 lesterlam standalone reproduction lab — which adds a **blind-read oracle**
 (the `repeat_range[mem].lower == 0` branch leaks foreign heap bytes as
 match-vs-no-match) at the same primitive this repo characterizes, but
-explicitly excludes weaponized RCE. The 2026-10-24 wave (AumLayer's
+explicitly excludes weaponized RCE. lilting.ch independently reproduced the
+fix boundary on five Ruby versions built from source (match-time `[BUG]` on
+3.4.11/4.0.6/4.0.8, glibc double-free abort on 3.4.11 for #13332) — same
+story, no exploitation step. The 2026-10-24 wave (AumLayer's
 19.3.5-vs-19.3.6 lab, Flawfence's sink analysis) also stops at
 memory-corruption/crash level. **No public exploit chain exists**;
 GitLab's own write-up calls the real attack "a grind" with most attempts

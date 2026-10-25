@@ -70,7 +70,10 @@ GitLab (disclosure, patch, TLDR detections) and the Ruby core team (upstream
 fixes). yaamlabs published the mechanics outline (16-bit wrap, `#+TODO:`
 interpolation, request-body grooming → `system()`); public PoC repos
 (TahuCryptsi et al.) are crash/detector scripts — equivalent to this repo's
-`poc/` layer; the deepest public artifact, the lesterlam reproduction lab,
+`poc/` layer; lilting.ch independently reproduced the fix boundary across
+five Ruby versions built from source (incl. the match-time `[BUG]` on
+3.4.11 and 4.0.8, and a glibc double-free abort on 3.4.11 for the #13332
+pattern); the deepest public artifact, the lesterlam reproduction lab,
 compiles the engine standalone and demonstrates a blind-read oracle at the
 same primitive characterized below — but explicitly excludes weaponized RCE
 (re-verified 2026-10-23 and 2026-10-24: no public technique exists to port).
@@ -105,4 +108,4 @@ odd/      feature tracking document
 - Advisories: [GitLab 19.5.1 patch release](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/) · [GHSA-83vq-rvff-66gw](https://github.com/advisories/GHSA-83vq-rvff-66gw) · [ruby-lang.org regexp fixes](https://www.ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/)
 - Upstream fixes: [ruby/ruby#16801](https://github.com/ruby/ruby/pull/16801) · [#19020](https://github.com/ruby/ruby/pull/19020) · [#13332](https://github.com/ruby/ruby/pull/13332)
 - Detections: [TLDR onigmo_native_worker_crash](https://gitlab.com/gitlab-security-oss/tldr/-/blob/main/Detections/platforms/GitLab/Vulnerability%20Detections/onigmo_native_worker_crash.md) · [org_mode_render_error_burst](https://gitlab.com/gitlab-security-oss/tldr/-/blob/main/Detections/platforms/GitLab/Vulnerability%20Detections/org_mode_render_error_burst.md)
-- Third-party: [yaamlabs analysis](https://yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler) · [al-ice.ai gem analysis](https://al-ice.ai/posts/2026/10/gitlab-cve-2026-110264-org-ruby-headline-regexp-unpatched-gem/) · [TahuCryptsi crash PoC](https://exploit-intel.com/exploit/5191822114207195) (prior art for the detector layer) · [lesterlam reproduction lab](https://sploitus.com/exploit?id=ECD80861-9EF6-5241-B99B-0FC4F2E238AD) · [AumLayer lab analysis](https://aumlayer.com/research/gitlab-org-mode-regex-overflow/) (GitLab CE 19.3.5 vs 19.3.6) · [Flawfence writeup](https://flawfence.com/blog/en/gitlab-cve-2026-110264-unauthenticated-rce-onigmo/)
+- Third-party: [yaamlabs analysis](https://yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler) · [lilting.ch GitLab overview](https://lilting.ch/en/articles/gitlab-cve-2026-110264-org-mode-rce) · [lilting.ch Ruby-fix matrix](https://lilting.ch/en/articles/ruby-regexp-onigmo-fixes-gitlab-cves) · [al-ice.ai gem analysis](https://al-ice.ai/posts/2026/10/gitlab-cve-2026-110264-org-ruby-headline-regexp-unpatched-gem/) · [TahuCryptsi crash PoC](https://exploit-intel.com/exploit/5191822114207195) (prior art for the detector layer) · [lesterlam reproduction lab](https://sploitus.com/exploit?id=ECD80861-9EF6-5241-B99B-0FC4F2E238AD) · [AumLayer lab analysis](https://aumlayer.com/research/gitlab-org-mode-regex-overflow/) (GitLab CE 19.3.5 vs 19.3.6) · [Flawfence writeup](https://flawfence.com/blog/en/gitlab-cve-2026-110264-unauthenticated-rce-onigmo/)
