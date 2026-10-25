@@ -17,8 +17,10 @@ attack), and a **characterized match-time write primitive** — value and
 offset both pattern-controlled, proven with an in-band marker echo — which
 goes beyond the public crash-PoCs. The full RCE chain (`system()` as the
 server user) remains **open research**: no public technique exists to port
-(the reporter's HackerOne writeup is private; public PoCs are crash/detector
-scripts). See [research-writeup](docs/research-writeup.md) §7.
+(the reporter's HackerOne writeup is private; public PoCs and labs are
+crash/detector/blind-read-oracle artifacts — re-verified 2026-10-24, when
+the AumLayer and Flawfence write-ups also stopped short of weaponization).
+See [research-writeup](docs/research-writeup.md) §7.
 
 ## Verification matrix
 
@@ -71,9 +73,9 @@ interpolation, request-body grooming → `system()`); public PoC repos
 `poc/` layer; the deepest public artifact, the lesterlam reproduction lab,
 compiles the engine standalone and demonstrates a blind-read oracle at the
 same primitive characterized below — but explicitly excludes weaponized RCE
-(verified 2026-10-23: no public technique exists to port). GitLab itself
-calls the real attack "a grind": noisy, most attempts failing — consistent
-with the heap-layout dependence measured in this repo's lab.
+(re-verified 2026-10-23 and 2026-10-24: no public technique exists to port).
+GitLab itself calls the real attack "a grind": noisy, most attempts failing
+— consistent with the heap-layout dependence measured in this repo's lab.
 
 Original work in this repo: the **fix-commit-anchored family datasheet**
 (ruby/ruby PR diffs), the **dockerized Ruby+org-ruby differential pair**
@@ -103,4 +105,4 @@ odd/      feature tracking document
 - Advisories: [GitLab 19.5.1 patch release](https://docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/) · [GHSA-83vq-rvff-66gw](https://github.com/advisories/GHSA-83vq-rvff-66gw) · [ruby-lang.org regexp fixes](https://www.ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/)
 - Upstream fixes: [ruby/ruby#16801](https://github.com/ruby/ruby/pull/16801) · [#19020](https://github.com/ruby/ruby/pull/19020) · [#13332](https://github.com/ruby/ruby/pull/13332)
 - Detections: [TLDR onigmo_native_worker_crash](https://gitlab.com/gitlab-security-oss/tldr/-/blob/main/Detections/platforms/GitLab/Vulnerability%20Detections/onigmo_native_worker_crash.md) · [org_mode_render_error_burst](https://gitlab.com/gitlab-security-oss/tldr/-/blob/main/Detections/platforms/GitLab/Vulnerability%20Detections/org_mode_render_error_burst.md)
-- Third-party: [yaamlabs analysis](https://yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler) · [al-ice.ai gem analysis](https://al-ice.ai/posts/2026/10/gitlab-cve-2026-110264-org-ruby-headline-regexp-unpatched-gem/) · [TahuCryptsi crash PoC](https://exploit-intel.com/exploit/5191822114207195) (prior art for the detector layer)
+- Third-party: [yaamlabs analysis](https://yaamlabs.com/blog/gitlab-cve-2026-110264-regex-compiler) · [al-ice.ai gem analysis](https://al-ice.ai/posts/2026/10/gitlab-cve-2026-110264-org-ruby-headline-regexp-unpatched-gem/) · [TahuCryptsi crash PoC](https://exploit-intel.com/exploit/5191822114207195) (prior art for the detector layer) · [lesterlam reproduction lab](https://sploitus.com/exploit?id=ECD80861-9EF6-5241-B99B-0FC4F2E238AD) · [AumLayer lab analysis](https://aumlayer.com/research/gitlab-org-mode-regex-overflow/) (GitLab CE 19.3.5 vs 19.3.6) · [Flawfence writeup](https://flawfence.com/blog/en/gitlab-cve-2026-110264-unauthenticated-rce-onigmo/)

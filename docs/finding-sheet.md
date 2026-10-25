@@ -17,8 +17,8 @@ Blog/3rd-party claims used only where marked and re-verified in the lab.
 | Affected | **Every GitLab CE/EE since 7.0 (2014)** |
 | Fixed (GitLab) | 19.5.1, 19.4.3, 19.3.6 + backports 19.2.9, 19.1.9, 19.0.10, 18.11.13 (2026-10-21) |
 | Fixed (Ruby) | 4.0.9 / 3.4.12 / 3.3.13 (2026-10-23) |
-| Reporter | joaxcar (Johan Carlsson) via GitLab's HackerOne program |
-| In the wild | No known exploitation; not in CISA KEV as of 2026-10-22 |
+| Reporter | joaxcar (Johan Carlsson) via GitLab's HackerOne program (H1 #4093475, still restricted; refs also GitLab work item 633633) |
+| In the wild | No known exploitation; **not in CISA KEV as of 2026-10-24**. CISA SSVC "Attend" (Exploitation none / Automatable yes / Technical impact total); EPSS ~1% (42nd pct). NVD + cve.org records live since 2026-10-21/22 (CWE-190) |
 
 ## Family map — 4 GitLab CVEs = 3 Onigmo bugs = 3 upstream fixes
 
@@ -30,10 +30,14 @@ fixes related to GitLab's CVEs"). C files live upstream in ruby/Onigmo.
 | CVE-2026-89078 | 9.9 / authed | 19.4.1 | Double free when parsing fails after an alternation | ruby/ruby#13332 (regparse.c: free node once via temp pointer) | 4.0.0 | **3.4.12** | 3.3.13 |
 | CVE-2026-93577 | 9.9 / authed | 19.4.1 | Integer overflow in the **size of a compiled pattern** | ruby/ruby#19020 commits `c2a3805` + `b3095b7` (regcomp.c) | 4.0.8 | **3.4.12** | 3.3.13 |
 | CVE-2026-97229 | 10.0 / unauth (CI lint path) | 19.4.2 (2026-10-12) | same size-overflow bug, CI/CD `regexp_matcher.rb` path | same as 93577 | 4.0.8 | **3.4.12** | 3.3.13 |
-| **CVE-2026-110264** | **10.0 / unauth** | **19.5.1** | **Overflow of internal repeat/null-check IDs in a pattern with many repeats** | **ruby/ruby#16801** (regcomp.c, +20/−0) | 4.0.9 | **3.4.12** | 3.3.13 |
+| **CVE-2026-110264** | **10.0 / unauth** | **19.5.1** | **Overflow of internal repeat/null-check IDs in a pattern with many repeats** | **ruby/ruby#16801** commit `493d26dc` (regcomp.c, +20/−0) | 4.0.9 | **3.4.12** | 3.3.13 |
 
 All three fixes land together in Ruby 3.4.12 → the lab pair is
 `ruby:3.4.11` (vulnerable to all three) vs `ruby:3.4.12` (fixed).
+GitLab's own backports of the Ruby fixes are public as omnibus patches:
+`config/patches/ruby/regexp-repeat-id-overflow-{3.3,3.4,4.0}.patch`
+(omnibus-gitlab commit `73cec6d8`) — a second primary diff source alongside
+the ruby/ruby PRs.
 
 ## Primary bug mechanics (CVE-2026-110264 = PR #16801)
 
@@ -130,6 +134,12 @@ CI route of the family (CVE-2026-97229): unauthenticated `/ci/lint`
 * **Ruby-side traps**: 3.2 and earlier get **no fix** (3.2 EOL 2026-04-01,
   3.2.11 was final — move to 3.4/4.0); 4.0.8 (same week) fixed the
   size-overflow pair but **not** 110264 — 4.0 users must install 4.0.9.
+  Tracker timeline (bugs.ruby-lang.org, via WebProNews 2026-10-23): the
+  #16801 fix sat on **master since April 2026** (first lands in Ruby 4.1);
+  S. Kaag flagged 4.0.8 shipping without it, J. Boussier (byroot) backported
+  to 3.4/3.3 within hours. Master-only merges ahead of a backport release
+  leave maintenance branches silently exposed — same lesson as the GitLab
+  re-patch trap.
 * **CVE-scanner gap**: GitLab's CVE records name only GitLab as the affected
   product, so scanners matching CVE records against installed Ruby versions
   have nothing to match — inventory via `ruby -v` or this repo's detector.
@@ -152,6 +162,8 @@ mirroring Puma worker respawn). Details + probe tables: `lab/README.md`.
 ## References
 
 - ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/ (CVE↔bug↔fix table, credits)
+- NVD nvd.nist.gov/vuln/detail/CVE-2026-110264 · cve.org CVE record (published 2026-10-21/22, CWE-190, CISA ADP SSVC)
+- gitlab.com/gitlab-org/omnibus-gitlab commit 73cec6d8 — GitLab's public Ruby backport patches (regexp-repeat-id-overflow-{3.3,3.4,4.0}.patch)
 - docs.gitlab.com/releases/patches/patch-release-gitlab-19-5-1-released/ (CVSS 10.0, affected ranges, detections)
 - github.com/ruby/ruby/pull/16801 · /pull/19020 · /pull/13332 (fix diffs)
 - gitlab.com/gitlab-security-oss/tldr — onigmo_native_worker_crash.md · org_mode_render_error_burst.md
