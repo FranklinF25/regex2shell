@@ -85,7 +85,7 @@ kill (both directions), the #19020 compile-hang arm, the pure write
 primitive with controlled value/offset, the brk-heap echo, and the
 placement model above.
 
-Public art as of 2026-10-24 (re-checked 2026-10-23 and 2026-10-24): crash/detector PoCs
+Public art as of 2026-10-24 (re-checked 2026-10-23, 2026-10-24, 2026-10-31): crash/detector PoCs
 (equivalent to this repo's `poc/` layer), mechanics outlines, and the
 lesterlam standalone reproduction lab — which adds a **blind-read oracle**
 (the `repeat_range[mem].lower == 0` branch leaks foreign heap bytes as
@@ -95,7 +95,20 @@ fix boundary on five Ruby versions built from source (match-time `[BUG]` on
 3.4.11/4.0.6/4.0.8, glibc double-free abort on 3.4.11 for #13332) — same
 story, no exploitation step. The 2026-10-24 wave (AumLayer's
 19.3.5-vs-19.3.6 lab, Flawfence's sink analysis) also stops at
-memory-corruption/crash level. **No public exploit chain exists**;
+memory-corruption/crash level. The 2026-10-31 re-check: the family sibling
+CVE-2026-97229 (the #19020 compile-time arm) is now **in the wild and in
+CISA KEV (2026-10-29)** — Alpine Linux's own GitLab was attacked
+2026-10-20/21 by an attacker who got "partway through the exploit" on an
+instance that had upgraded GitLab to 19.3.6 but still ran a vulnerable
+system Ruby (the source-install trap, hit in production); Rapid7's public
+PoC for that sibling (2026-10-13) executes commands as the `git` user via
+the same #19020 arm. For this repo's #16801 match-time arm specifically,
+the only public full-RCE claim (murat-levi/gitlab-rce-toolkit,
+2026-10-29) is **unverified** — no evidence artifacts, and its payload
+constants wrap INT_MAX via the #19020 size primitive rather than the
+16-bit ID wrap; the new honest art (al4n4n 2026-10-27, googlesky
+2026-10-24) stays crash/detector-level. **No verified public exploit
+chain exists for this primitive**;
 GitLab's own write-up calls the real attack "a grind" with most attempts
 failing — matching the heap-layout dependence measured here. The
 reporter's full technique (heap grooming via request body to `system()`)

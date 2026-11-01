@@ -8,7 +8,10 @@ HackerOne program). Root cause: Onigmo's regex bytecode operands are 16-bit
 negative, driving an OOB **read** in the match-cache count walk and an OOB
 **write** at match time. Fixed in GitLab 19.5.1+ and Ruby 4.0.9 / 3.4.12 /
 3.3.13. Family context: CVE-2026-89078 (double free), CVE-2026-93577 /
-CVE-2026-97229 (compiled-size overflow).
+CVE-2026-97229 (compiled-size overflow — that sibling is **in CISA KEV
+since 2026-10-29** after an in-the-wild attack on Alpine Linux's GitLab,
+via the same #19020 arm; CVE-2026-110264 itself is not in KEV as of
+2026-10-31 — see the finding-sheet's "Threat status").
 
 **Results (this repo, all against the pinned lab):** a **safe differential
 detector** (zero crashes on both builds), a **deterministic interpreter
@@ -18,8 +21,13 @@ offset both pattern-controlled, proven with an in-band marker echo — which
 goes beyond the public crash-PoCs. The full RCE chain (`system()` as the
 server user) remains **open research**: no public technique exists to port
 (the reporter's HackerOne writeup is private; public PoCs and labs are
-crash/detector/blind-read-oracle artifacts — re-verified 2026-10-24, when
-the AumLayer and Flawfence write-ups also stopped short of weaponization).
+crash/detector/blind-read-oracle artifacts — re-verified 2026-10-24 and
+2026-10-31. Caveat 2026-10-31: a public "RCE toolkit" claim for this CVE
+(murat-levi, 2026-10-29) is unverified — no evidence artifacts, and its
+payload constants match the sibling #19020 compile-time arm, not this
+CVE's match-time write; the weaponized family chain that does exist
+publicly — Rapid7's 97229 PoC, attacked in the wild at Alpine Linux —
+also rides #19020).
 See [research-writeup](docs/research-writeup.md) §7.
 
 ## Verification matrix
@@ -79,7 +87,9 @@ five Ruby versions built from source (incl. the match-time `[BUG]` on
 pattern); the deepest public artifact, the lesterlam reproduction lab,
 compiles the engine standalone and demonstrates a blind-read oracle at the
 same primitive characterized below — but explicitly excludes weaponized RCE
-(re-verified 2026-10-23 and 2026-10-24: no public technique exists to port).
+(re-verified 2026-10-23, 2026-10-24 and 2026-10-31: no verified public
+technique exists to port — the 2026-10-29 murat-levi toolkit claim ships
+no evidence and appears to re-badge the sibling #19020 primitive).
 GitLab itself calls the real attack "a grind": noisy, most attempts failing
 — consistent with the heap-layout dependence measured in this repo's lab.
 

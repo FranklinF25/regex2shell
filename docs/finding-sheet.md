@@ -18,7 +18,7 @@ Blog/3rd-party claims used only where marked and re-verified in the lab.
 | Fixed (GitLab) | 19.5.1, 19.4.3, 19.3.6 + backports 19.2.9, 19.1.9, 19.0.10, 18.11.13 (2026-10-21) |
 | Fixed (Ruby) | 4.0.9 / 3.4.12 / 3.3.13 (2026-10-23) |
 | Reporter | joaxcar (Johan Carlsson) via GitLab's HackerOne program (H1 #4093475, still restricted; refs also GitLab work item 633633) |
-| In the wild | No known exploitation; **not in CISA KEV as of 2026-10-24**. CISA SSVC "Attend" (Exploitation none / Automatable yes / Technical impact total); EPSS ~1% (42nd pct). NVD + cve.org records live since 2026-10-21/22 (CWE-190) |
+| In the wild | No known exploitation of **this** CVE; **not in CISA KEV as of 2026-10-31** (CISA record still "Exploitation: none"). CISA SSVC "Attend" (Exploitation none / Automatable yes / Technical impact total); EPSS ~1% (42nd pct, 2026-10-24). NVD + cve.org records live since 2026-10-21/22 (CWE-190). Family sibling **CVE-2026-97229 is in KEV since 2026-10-29** after an in-the-wild attack — see "Threat status" |
 
 ## Family map — 4 GitLab CVEs = 3 Onigmo bugs = 3 upstream fixes
 
@@ -28,7 +28,7 @@ fixes related to GitLab's CVEs"). C files live upstream in ruby/Onigmo.
 | GitLab CVE | CVSS / auth | GitLab fix | Onigmo bug | Upstream fix | Ruby 4.0 | Ruby 3.4 | Ruby 3.3 |
 |---|---|---|---|---|---|---|---|
 | CVE-2026-89078 | 9.9 / authed | 19.4.1 | Double free when parsing fails after an alternation | ruby/ruby#13332 (regparse.c: free node once via temp pointer) | 4.0.0 | **3.4.12** | 3.3.13 |
-| CVE-2026-93577 | 9.9 / authed | 19.4.1 | Integer overflow in the **size of a compiled pattern** | ruby/ruby#19020 commits `c2a3805` + `b3095b7` (regcomp.c) | 4.0.8 | **3.4.12** | 3.3.13 |
+| CVE-2026-93577 | 9.9 / authed | 19.4.1 | Integer overflow in the **size of a compiled pattern** | ruby/ruby#19020 commits `c2a3805` + `b3095b7` + follow-up `366f5fdc00` (regcomp.c) | 4.0.8 | **3.4.12** | 3.3.13 |
 | CVE-2026-97229 | 10.0 / unauth (CI lint path) | 19.4.2 (2026-10-12) | same size-overflow bug, CI/CD `regexp_matcher.rb` path — TLDR frames it as a **bypass of the 93577 fix**; CI-path pair affected 19.2+ only | same as 93577 | 4.0.8 | **3.4.12** | 3.3.13 |
 | **CVE-2026-110264** | **10.0 / unauth** | **19.5.1** | **Overflow of internal repeat/null-check IDs in a pattern with many repeats** | **ruby/ruby#16801** commit `493d26dc` (regcomp.c, +20/−0) | 4.0.9 | **3.4.12** | 3.3.13 |
 
@@ -95,7 +95,9 @@ assert_raise(RegexpError) { Regexp.new(source) }
   passes for an enormous repeat (`Regexp.new` hangs unrolling it);
   `.{100000,}` × 21475: emitted program size passes `INT_MAX`, wrapping
   `RelAddrType` offsets. Fix: limit compare by division (`c2a3805`); cap
-  program size as emitted → `RegexpError` (`b3095b7`).
+  program size as emitted → `RegexpError` (`b3095b7`); follow-up
+  `366f5fdc00` stops subexpression calls from overwriting the `OP_END`
+  size error [Corgea, 2026-10-30].
 * **#13332 double free** — parse failure after an alternation with too-big
   repetition quantifiers freed the node twice (parse-time + compile-time).
 
@@ -190,6 +192,42 @@ crashes on #16801; `|{1000000}` aborts 3.4.11 with glibc `double free
 detected` (#13332 live on the 3.4 series); the nested-repeat compile eats
 2.6 GB before the 30 s kill vs instant `RegexpError` on 3.4.12.
 
+## Threat status (checked 2026-10-31)
+
+* **CVE-2026-97229 (sibling, same engine, #19020 arm): in the wild + KEV.**
+  CISA added it to the KEV catalog on **2026-10-29** (federal due date
+  2026-11-01) after an attack on **Alpine Linux's own GitLab server**
+  (2026-10-20/21: newly registered account, crafted CI configs, 8 worker
+  crashes — "in 4 of those crashes the attacker got partway through the
+  exploit and failed at the next step"; retries 10-25/26 failed). Alpine
+  rebuilt the instance 10-27/28 and rotated all credentials; aports,
+  packages and signing keys were never on that server. Notably, Alpine had
+  already upgraded to GitLab 19.3.6 but its image ran a **separately
+  installed system Ruby** — the source-install trap above, hit in
+  production. Rapid7 has a **public weaponized PoC since 2026-10-13**
+  (commands as the `git` user on official 19.4.1; does not run on 19.4.2) —
+  that chain rides the **#19020 compile-time arm, not this repo's #16801
+  match-time write**.
+* **CVE-2026-110264: no verified public chain yet.** First public full-RCE
+  *claim*: `murat-levi/gitlab-rce-toolkit` (2026-10-29) — **unverified**
+  [code audit 2026-10-31]: no evidence artifacts, README-promised `docs/`
+  absent, and its payload constants (`REPEAT_COUNT = ceil(INT_MAX/37151)`)
+  match the **#19020** INT_MAX-wrap primitive, not #16801 (16-bit ID wrap);
+  its `layout.py` does real ELF gadget-hunting (`system@plt` call sites in
+  libruby.so), consistent with a port of the Rapid7 97229 technique. New
+  honest art stays crash/detector-level: al4n4n (2026-10-27 — SIGSEGV/SIGILL
+  via the anonymous `?format=json&viewer=rich` blob view + writeup;
+  corroborates the `headline.rb` raw-interpolation sink) and googlesky
+  (2026-10-24 — timeout-oracle lab on 19.3.1 + Nuclei version fingerprint;
+  the "→ system()" in its summary is aspirational). Press consensus through
+  2026-10-30/31 (heise, Loginsoft, rescana, Ostorlab): no public exploit for
+  this CVE.
+* **Detection/response wave**: GitLab now publishes **7 experimental Sigma
+  rules** in TLDR for this family [press-reported 2026-10-29/30; the two
+  enumerated above verified here], repeating that a successful exploit may
+  leave no crash. Alpine's own distro fix is a remediation precedent:
+  `ruby` 3.4.12 in Alpine 3.22-3.24/edge, 3.3.13 in 3.21.
+
 ## References
 
 - ruby-lang.org/en/news/2026/10/23/regexp-fixes-for-gitlab-cves/ (CVE↔bug↔fix table, credits)
@@ -202,3 +240,6 @@ detected` (#13332 live on the 3.4 series); the nested-repeat compile eats
 - thehackernews.com/2026/10/ruby-fixes-three-regex-engine-bugs.html (Ruby-side remediation facts: 3.2 EOL no-fix, 4.0.8 partial-fix trap, CVE-scanner gap, embedded-Ruby check)
 - lilting.ch/en/articles/gitlab-cve-2026-110264-org-mode-rce · lilting.ch/en/articles/ruby-regexp-onigmo-fixes-gitlab-cves (headline.rb:99, preview-route detail, upgrade-path/stop table, backport-scope trap, grep operationalization, independent WSL2 5-version matrix, omnibus patch sourcing)
 - GHSA-83vq-rvff-66gw (GitLab advisory record)
+- Threat status 2026-10-29/31: CISA KEV catalog feed (CVE-2026-97229 dateAdded 2026-10-29; 110264 absent — checked 2026-10-31) · Alpine Linux postmortem + Rapid7 97229 PoC (2026-10-13) via rescana.com/post/ruby-onigmo-regexp-fixes-gitlab-cves-october-2026 and heise.de/en-news/Ruby-fixes-three-critical-bugs-CVE-scanners-don-t-flag-11505748.html · blog.ostorlab.co/gitlab-unauthenticated-rce-cve-2026-110264.html (KEV/Alpine/Rapid7/Sigma count) · corgea.com/research/cve-2026-110264-97229-93577-89078-ruby-onigmo-regexp-gitlab-rce (366f5fdc00)
+- Unverified 110264 RCE claim (audited 2026-10-31): github.com/murat-levi/gitlab-rce-toolkit · sploitus.com/exploit?id=D4615DDB-E8BE-5BEA-B1B9-3446FFE3579E — no evidence artifacts; payload constants match the #19020 arm
+- Crash-level art: github.com/al4n4n/CVE-2026-110264 (+ blog.al4n4n.com writeup; anonymous `viewer=rich` blob GET) · github.com/googlesky/CVE-2026-110264 (timeout oracle, Nuclei version fingerprint)
